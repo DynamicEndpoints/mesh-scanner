@@ -1,5 +1,7 @@
 # mesh-scanner MCP Server
 
+[![smithery badge](https://smithery.ai/badge/@DynamicEndpoints/mesh-scanner)](https://smithery.ai/server/@DynamicEndpoints/mesh-scanner)
+
 A Model Context Protocol server
 
 This is a TypeScript-based MCP server that implements a simple notes system. It demonstrates core MCP concepts by providing:
@@ -43,6 +45,16 @@ npm run watch
 ```
 
 ## Installation
+
+### Installing via Smithery
+
+To install Mesh Scanner for Claude Desktop automatically via [Smithery](https://smithery.ai/server/@DynamicEndpoints/mesh-scanner):
+
+```bash
+npx -y @smithery/cli install @DynamicEndpoints/mesh-scanner --client claude
+```
+
+### Installing Manually
 
 To use with Claude Desktop, add the server config:
 
