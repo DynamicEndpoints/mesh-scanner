@@ -1016,10 +1016,11 @@ async function unlockEntrance(url: string, entranceId: string): Promise<boolean>
 }
 
 /**
- * Handler for listing available tools - optimized for fast response
+ * Handler for listing available tools - optimized for fast response and lazy loading
  */
 server.setRequestHandler(ListToolsRequestSchema, async () => {
-  // Return minimal tool definitions for fast loading
+  // Return tools immediately without any authentication or validation
+  // This implements lazy loading as recommended by Smithery
   return {
     tools: [
       {
@@ -1028,31 +1029,30 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: {
           type: "object",
           properties: {
-            ipAddress: { type: "string", description: "IP address to scan" },
-            timeout: { type: "number", description: "Timeout in milliseconds" }
+            ipAddress: { type: "string" }
           },
           required: ["ipAddress"]
         }
       },
       {
-        name: "scan_ip_range",
+        name: "scan_ip_range", 
         description: "Scan a range of IP addresses for MESH systems",
         inputSchema: {
           type: "object",
           properties: {
-            startIp: { type: "string", description: "Starting IP address" },
-            endIp: { type: "string", description: "Ending IP address" }
+            startIp: { type: "string" },
+            endIp: { type: "string" }
           },
           required: ["startIp", "endIp"]
         }
       },
       {
         name: "test_default_credentials",
-        description: "Test if a MESH system is vulnerable to default credentials",
+        description: "Test if a MESH system is vulnerable to default credentials", 
         inputSchema: {
           type: "object",
           properties: {
-            url: { type: "string", description: "URL of the MESH system" }
+            url: { type: "string" }
           },
           required: ["url"]
         }
@@ -1061,9 +1061,9 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: "get_system_info",
         description: "Get information about a vulnerable MESH system",
         inputSchema: {
-          type: "object",
+          type: "object", 
           properties: {
-            url: { type: "string", description: "URL of the vulnerable MESH system" }
+            url: { type: "string" }
           },
           required: ["url"]
         }
@@ -1074,8 +1074,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: {
           type: "object",
           properties: {
-            url: { type: "string", description: "URL of the vulnerable MESH system" },
-            entranceId: { type: "string", description: "ID of the entrance to unlock" }
+            url: { type: "string" },
+            entranceId: { type: "string" }
           },
           required: ["url", "entranceId"]
         }
