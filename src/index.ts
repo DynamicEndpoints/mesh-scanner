@@ -26,9 +26,8 @@ import {
   GetPromptRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 
-// Use require for compatibility
-const axios = require('axios').default;
-const cheerio = require('cheerio');
+import axios from 'axios';
+import * as cheerio from 'cheerio';
 
 // Enhanced interfaces
 interface ScanResult {
@@ -1455,8 +1454,8 @@ async function main() {
   await server.connect(transport);
   
   // Start HTTP server
-  const http = require('http');
-  const serverInstance = http.createServer(async (req, res) => {
+  const { createServer } = await import('http');
+  const serverInstance = createServer(async (req, res) => {
     if (req.url === '/mcp' || req.url?.startsWith('/mcp?')) {
       await transport.handleRequest(req, res);
     } else {
