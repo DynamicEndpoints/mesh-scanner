@@ -1016,9 +1016,10 @@ async function unlockEntrance(url: string, entranceId: string): Promise<boolean>
 }
 
 /**
- * Handler for listing available tools
+ * Handler for listing available tools - optimized for fast response
  */
 server.setRequestHandler(ListToolsRequestSchema, async () => {
+  // Return minimal tool definitions for fast loading
   return {
     tools: [
       {
@@ -1027,54 +1028,20 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: {
           type: "object",
           properties: {
-            ipAddress: {
-              type: "string",
-              description: "IP address to scan (e.g., 192.168.1.1)"
-            },
-            timeout: {
-              type: "number",
-              description: "Timeout in milliseconds (default: 5000)"
-            },
-            config: {
-              type: "object",
-              properties: {
-                userAgent: { type: "string", description: "Custom User-Agent string" },
-                rateLimit: { type: "number", description: "Rate limit in ms between requests" }
-              }
-            }
+            ipAddress: { type: "string", description: "IP address to scan" },
+            timeout: { type: "number", description: "Timeout in milliseconds" }
           },
           required: ["ipAddress"]
         }
       },
       {
         name: "scan_ip_range",
-        description: "Scan a range of IP addresses for MESH systems and test default credentials",
+        description: "Scan a range of IP addresses for MESH systems",
         inputSchema: {
           type: "object",
           properties: {
-            startIp: {
-              type: "string",
-              description: "Starting IP address (e.g., 192.168.1.1)"
-            },
-            endIp: {
-              type: "string",
-              description: "Ending IP address (e.g., 192.168.1.254)"
-            },
-            timeout: {
-              type: "number",
-              description: "Timeout in milliseconds (default: 5000)"
-            },
-            concurrency: {
-              type: "number",
-              description: "Number of concurrent scans (default: 5, max: 20)"
-            },
-            config: {
-              type: "object",
-              properties: {
-                userAgent: { type: "string", description: "Custom User-Agent string" },
-                rateLimit: { type: "number", description: "Rate limit in ms between requests" }
-              }
-            }
+            startIp: { type: "string", description: "Starting IP address" },
+            endIp: { type: "string", description: "Ending IP address" }
           },
           required: ["startIp", "endIp"]
         }
@@ -1085,60 +1052,30 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: {
           type: "object",
           properties: {
-            url: {
-              type: "string",
-              description: "URL of the MESH system (e.g., http://192.168.1.1)"
-            },
-            config: {
-              type: "object",
-              properties: {
-                userAgent: { type: "string", description: "Custom User-Agent string" }
-              }
-            }
+            url: { type: "string", description: "URL of the MESH system" }
           },
           required: ["url"]
         }
       },
       {
         name: "get_system_info",
-        description: "Get information about a vulnerable MESH system (users, events, etc.)",
+        description: "Get information about a vulnerable MESH system",
         inputSchema: {
           type: "object",
           properties: {
-            url: {
-              type: "string",
-              description: "URL of the vulnerable MESH system"
-            },
-            config: {
-              type: "object",
-              properties: {
-                userAgent: { type: "string", description: "Custom User-Agent string" }
-              }
-            }
+            url: { type: "string", description: "URL of the vulnerable MESH system" }
           },
           required: ["url"]
         }
       },
       {
         name: "unlock_entrance",
-        description: "Unlock an entrance (for educational purposes only)",
+        description: "Unlock an entrance (educational purposes only)",
         inputSchema: {
           type: "object",
           properties: {
-            url: {
-              type: "string",
-              description: "URL of the vulnerable MESH system"
-            },
-            entranceId: {
-              type: "string",
-              description: "ID of the entrance to unlock"
-            },
-            config: {
-              type: "object",
-              properties: {
-                userAgent: { type: "string", description: "Custom User-Agent string" }
-              }
-            }
+            url: { type: "string", description: "URL of the vulnerable MESH system" },
+            entranceId: { type: "string", description: "ID of the entrance to unlock" }
           },
           required: ["url", "entranceId"]
         }
@@ -1149,19 +1086,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: {
           type: "object",
           properties: {
-            format: {
-              type: "string",
-              enum: ["json", "csv", "xml"],
-              description: "Export format (default: json)"
-            },
-            includeVulnerableOnly: {
-              type: "boolean",
-              description: "Include only vulnerable systems (default: false)"
-            },
-            scanId: {
-              type: "string",
-              description: "Specific scan ID to export (optional)"
-            }
+            format: { type: "string", enum: ["json", "csv", "xml"] }
           },
           required: ["format"]
         }
