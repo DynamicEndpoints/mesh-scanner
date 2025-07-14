@@ -16,7 +16,7 @@
     "inspector": "npx @modelcontextprotocol/inspector build/index.js"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.1",
+    "@modelcontextprotocol/sdk": "1.15.1",
     "axios": "^1.7.9",
     "cheerio": "^1.0.0"
   },

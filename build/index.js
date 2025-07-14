@@ -11,11 +11,10 @@
  *
  * For educational and security research purposes only.
  */
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { CallToolRequestSchema, ErrorCode, ListResourcesRequestSchema, ListToolsRequestSchema, McpError, ReadResourceRequestSchema, ListPromptsRequestSchema, GetPromptRequestSchema, } from "@modelcontextprotocol/sdk/types.js";
-import axios from "axios";
-import * as cheerio from "cheerio";
+import { Server, HttpServerTransport, CallToolRequestSchema, ErrorCode, ListResourcesRequestSchema, ListToolsRequestSchema, McpError, ReadResourceRequestSchema, ListPromptsRequestSchema, GetPromptRequestSchema, } from "@modelcontextprotocol/sdk";
+// Use require for compatibility
+const axios = require('axios').default;
+const cheerio = require('cheerio');
 // Enhanced storage with metadata
 const scanResults = [];
 const vulnerableSystems = [];
@@ -842,9 +841,11 @@ async function unlockEntrance(url, entranceId) {
     }
 }
 /**
- * Handler for listing available tools
+ * Handler for listing available tools - optimized for fast response and lazy loading
  */
 server.setRequestHandler(ListToolsRequestSchema, async () => {
+    // Return tools immediately without any authentication or validation
+    // This implements lazy loading as recommended by Smithery
     return {
         tools: [
             {
@@ -853,54 +854,19 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                 inputSchema: {
                     type: "object",
                     properties: {
-                        ipAddress: {
-                            type: "string",
-                            description: "IP address to scan (e.g., 192.168.1.1)"
-                        },
-                        timeout: {
-                            type: "number",
-                            description: "Timeout in milliseconds (default: 5000)"
-                        },
-                        config: {
-                            type: "object",
-                            properties: {
-                                userAgent: { type: "string", description: "Custom User-Agent string" },
-                                rateLimit: { type: "number", description: "Rate limit in ms between requests" }
-                            }
-                        }
+                        ipAddress: { type: "string" }
                     },
                     required: ["ipAddress"]
                 }
             },
             {
                 name: "scan_ip_range",
-                description: "Scan a range of IP addresses for MESH systems and test default credentials",
+                description: "Scan a range of IP addresses for MESH systems",
                 inputSchema: {
                     type: "object",
                     properties: {
-                        startIp: {
-                            type: "string",
-                            description: "Starting IP address (e.g., 192.168.1.1)"
-                        },
-                        endIp: {
-                            type: "string",
-                            description: "Ending IP address (e.g., 192.168.1.254)"
-                        },
-                        timeout: {
-                            type: "number",
-                            description: "Timeout in milliseconds (default: 5000)"
-                        },
-                        concurrency: {
-                            type: "number",
-                            description: "Number of concurrent scans (default: 5, max: 20)"
-                        },
-                        config: {
-                            type: "object",
-                            properties: {
-                                userAgent: { type: "string", description: "Custom User-Agent string" },
-                                rateLimit: { type: "number", description: "Rate limit in ms between requests" }
-                            }
-                        }
+                        startIp: { type: "string" },
+                        endIp: { type: "string" }
                     },
                     required: ["startIp", "endIp"]
                 }
@@ -911,60 +877,30 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                 inputSchema: {
                     type: "object",
                     properties: {
-                        url: {
-                            type: "string",
-                            description: "URL of the MESH system (e.g., http://192.168.1.1)"
-                        },
-                        config: {
-                            type: "object",
-                            properties: {
-                                userAgent: { type: "string", description: "Custom User-Agent string" }
-                            }
-                        }
+                        url: { type: "string" }
                     },
                     required: ["url"]
                 }
             },
             {
                 name: "get_system_info",
-                description: "Get information about a vulnerable MESH system (users, events, etc.)",
+                description: "Get information about a vulnerable MESH system",
                 inputSchema: {
                     type: "object",
                     properties: {
-                        url: {
-                            type: "string",
-                            description: "URL of the vulnerable MESH system"
-                        },
-                        config: {
-                            type: "object",
-                            properties: {
-                                userAgent: { type: "string", description: "Custom User-Agent string" }
-                            }
-                        }
+                        url: { type: "string" }
                     },
                     required: ["url"]
                 }
             },
             {
                 name: "unlock_entrance",
-                description: "Unlock an entrance (for educational purposes only)",
+                description: "Unlock an entrance (educational purposes only)",
                 inputSchema: {
                     type: "object",
                     properties: {
-                        url: {
-                            type: "string",
-                            description: "URL of the vulnerable MESH system"
-                        },
-                        entranceId: {
-                            type: "string",
-                            description: "ID of the entrance to unlock"
-                        },
-                        config: {
-                            type: "object",
-                            properties: {
-                                userAgent: { type: "string", description: "Custom User-Agent string" }
-                            }
-                        }
+                        url: { type: "string" },
+                        entranceId: { type: "string" }
                     },
                     required: ["url", "entranceId"]
                 }
@@ -975,19 +911,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                 inputSchema: {
                     type: "object",
                     properties: {
-                        format: {
-                            type: "string",
-                            enum: ["json", "csv", "xml"],
-                            description: "Export format (default: json)"
-                        },
-                        includeVulnerableOnly: {
-                            type: "boolean",
-                            description: "Include only vulnerable systems (default: false)"
-                        },
-                        scanId: {
-                            type: "string",
-                            description: "Specific scan ID to export (optional)"
-                        }
+                        format: { type: "string", enum: ["json", "csv", "xml"] }
                     },
                     required: ["format"]
                 }
@@ -1262,9 +1186,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
  * Start the server
  */
 async function main() {
-    const transport = new StdioServerTransport();
+    const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+    const transport = new HttpServerTransport({ port });
     await server.connect(transport);
-    console.error("MESH Scanner MCP server running on stdio");
+    console.error(`MESH Scanner MCP server running on http://localhost:${port}`);
     console.error("Version: 0.2.0 - Enhanced with prompts, resources, and improved tools");
     // Error handling
     server.onerror = (error) => console.error("[MCP Error]", error);
