@@ -4,6 +4,8 @@
   "description": "A Model Context Protocol server for network security scanning and analysis",
   "private": true,
   "type": "module",
+  "main": "./build/index.js",
+  "module": "./src/index.ts",
   "bin": {
     "mesh-scanner": "./build/index.js"
   },
@@ -16,7 +18,7 @@
     "inspector": "npx @modelcontextprotocol/inspector build/index.js"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.15.1",
+    "@modelcontextprotocol/sdk": "1.15.1",
     "axios": "^1.7.9",
     "cheerio": "^1.0.0"
   },
