@@ -1,1 +1,15 @@
-runtime: "typescript"
+runtime: "container"
+build:
+  dockerfile: "Dockerfile"
+  dockerBuildPath: "."
+startCommand:
+  type: "http"
+  configSchema:
+    type: "object"
+    properties:
+      apiKey:
+        type: "string"
+        description: "API key for enhanced features (optional)"
+    required: []
+  exampleConfig:
+    apiKey: "optional-api-key"

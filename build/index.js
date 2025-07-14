@@ -11,7 +11,9 @@
  *
  * For educational and security research purposes only.
  */
-import { Server, HttpServerTransport, CallToolRequestSchema, ErrorCode, ListResourcesRequestSchema, ListToolsRequestSchema, McpError, ReadResourceRequestSchema, ListPromptsRequestSchema, GetPromptRequestSchema, } from "@modelcontextprotocol/sdk";
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { CallToolRequestSchema, ErrorCode, ListResourcesRequestSchema, ListToolsRequestSchema, McpError, ReadResourceRequestSchema, ListPromptsRequestSchema, GetPromptRequestSchema, } from "@modelcontextprotocol/sdk/types.js";
 // Use require for compatibility
 const axios = require('axios').default;
 const cheerio = require('cheerio');
@@ -1186,17 +1188,31 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
  * Start the server
  */
 async function main() {
-    const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
-    const transport = new HttpServerTransport({ port });
+    const port = process.env.PORT ? parseInt(process.env.PORT) : 3000;
+    // Create HTTP server with proper configuration
+    const transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: () => `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    });
     await server.connect(transport);
-    console.error(`MESH Scanner MCP server running on http://localhost:${port}`);
-    console.error("Version: 0.2.0 - Enhanced with prompts, resources, and improved tools");
+    // Start HTTP server
+    const http = require('http');
+    const serverInstance = http.createServer(async (req, res) => {
+        if (req.url === '/mcp' || req.url?.startsWith('/mcp?')) {
+            await transport.handleRequest(req, res);
+        }
+        else {
+            res.writeHead(404);
+            res.end('Not Found');
+        }
+    });
+    serverInstance.listen(port, '0.0.0.0', () => {
+        console.error("MESH Scanner MCP server running on HTTP transport");
+        console.error("Version: 0.2.0 - Enhanced with prompts, resources, and improved tools");
+        console.error(`Server listening on http://0.0.0.0:${port}`);
+        console.error(`MCP endpoint available at: http://0.0.0.0:${port}/mcp`);
+    });
     // Error handling
     server.onerror = (error) => console.error("[MCP Error]", error);
-    process.on("SIGINT", async () => {
-        await server.close();
-        process.exit(0);
-    });
 }
 main().catch((error) => {
     console.error("Server error:", error);
