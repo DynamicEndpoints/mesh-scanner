@@ -1,7 +1,7 @@
 {
   "name": "mesh-scanner",
-  "version": "0.1.0",
-  "description": "A Model Context Protocol server",
+  "version": "0.2.0",
+  "description": "A Model Context Protocol server for network security scanning and analysis",
   "private": true,
   "type": "module",
   "bin": {
@@ -17,12 +17,12 @@
     "inspector": "npx @modelcontextprotocol/inspector build/index.js"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "0.6.0",
+    "@modelcontextprotocol/sdk": "^1.0.1",
     "axios": "^1.7.9",
     "cheerio": "^1.0.0"
   },
   "devDependencies": {
-    "@types/node": "^20.11.24",
-    "typescript": "^5.3.3"
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
   }
 }
