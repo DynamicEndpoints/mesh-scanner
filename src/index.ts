@@ -25,8 +25,10 @@ import {
   ListPromptsRequestSchema,
   GetPromptRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
-import axios from "axios";
-import * as cheerio from "cheerio";
+
+// Use require for compatibility
+const axios = require('axios').default;
+const cheerio = require('cheerio');
 
 // Enhanced interfaces
 interface ScanResult {
@@ -901,7 +903,7 @@ async function getSystemInfo(url: string): Promise<SystemInfo | null> {
     const users: UserInfo[] = [];
     const $users = cheerio.load(usersResponse.data);
     
-    $users('table tr').each((i: number, elem: cheerio.Element) => {
+    $users('table tr').each((i: number, elem: any) => {
       if (i === 0) return; // Skip header row
       
       const columns = $users(elem).find('td');
@@ -930,7 +932,7 @@ async function getSystemInfo(url: string): Promise<SystemInfo | null> {
     const recentEvents: EventInfo[] = [];
     const $events = cheerio.load(eventsResponse.data);
     
-    $events('table tr').each((i: number, elem: cheerio.Element) => {
+    $events('table tr').each((i: number, elem: any) => {
       if (i === 0) return; // Skip header row
       if (i > 10) return; // Only get 10 most recent events
       
