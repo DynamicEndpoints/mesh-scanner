@@ -26,5 +26,8 @@ RUN chown -R mesh-scanner:nodejs /app
 # Switch to non-root user
 USER mesh-scanner
 
+# Expose the port
+EXPOSE 3000
+
 # Start the application
 CMD ["node", "build/index.js"]
