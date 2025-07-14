@@ -13,9 +13,9 @@
  * For educational and security research purposes only.
  */
 
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
-  Server,
-  HttpServerTransport,
   CallToolRequestSchema,
   ErrorCode,
   ListResourcesRequestSchema,
@@ -24,7 +24,7 @@ import {
   ReadResourceRequestSchema,
   ListPromptsRequestSchema,
   GetPromptRequestSchema,
-} from "@modelcontextprotocol/sdk/index.js";
+} from "@modelcontextprotocol/sdk/types.js";
 
 // Use require for compatibility
 const axios = require('axios').default;
@@ -1445,10 +1445,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
  * Start the server
  */
 async function main() {
-  const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
-  const transport = new HttpServerTransport({ port });
+  const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error(`MESH Scanner MCP server running on http://localhost:${port}`);
+  console.error("MESH Scanner MCP server running on stdio");
   console.error("Version: 0.2.0 - Enhanced with prompts, resources, and improved tools");
   
   // Error handling
