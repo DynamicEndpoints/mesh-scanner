@@ -14,7 +14,7 @@
  */
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import {
   CallToolRequestSchema,
   ErrorCode,
@@ -1445,17 +1445,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
  * Start the server
  */
 async function main() {
-  const transport = new StdioServerTransport();
+  const port = process.env.PORT ? parseInt(process.env.PORT) : 3000;
+  const transport = new StreamableHTTPServerTransport({
+    sessionIdGenerator: () => `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  });
+  
   await server.connect(transport);
-  console.error("MESH Scanner MCP server running on stdio");
+  console.error("MESH Scanner MCP server running on HTTP transport");
   console.error("Version: 0.2.0 - Enhanced with prompts, resources, and improved tools");
+  console.error(`Server listening on port ${port}`);
   
   // Error handling
   server.onerror = (error) => console.error("[MCP Error]", error);
-  process.on("SIGINT", async () => {
-    await server.close();
-    process.exit(0);
-  });
 }
 
 main().catch((error) => {
