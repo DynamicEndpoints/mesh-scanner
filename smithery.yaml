@@ -10,6 +10,14 @@ startCommand:
       apiKey:
         type: "string"
         description: "API key for enhanced features (optional)"
+      port:
+        type: "number"
+        description: "Port to run the server on (default: 3000)"
+        default: 3000
     required: []
+  configToEnv:
+    apiKey: "API_KEY"
+    port: "PORT"
   exampleConfig:
     apiKey: "optional-api-key"
+    port: 3000
