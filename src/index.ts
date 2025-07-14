@@ -1454,6 +1454,7 @@ async function main() {
   console.error("MESH Scanner MCP server running on HTTP transport");
   console.error("Version: 0.2.0 - Enhanced with prompts, resources, and improved tools");
   console.error(`Server listening on port ${port}`);
+  console.error(`MCP endpoint available at: http://0.0.0.0:${port}/mcp`);
   
   // Error handling
   server.onerror = (error) => console.error("[MCP Error]", error);
