@@ -7,30 +7,478 @@
  * - Test for default credentials vulnerability (freedom:viscount)
  * - Access system information (users, events, etc.)
  * - Perform actions like unlocking entrances
+ * - Generate security reports and assessments
  *
  * For educational and security research purposes only.
  */
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { CallToolRequestSchema, ErrorCode, ListResourcesRequestSchema, ListToolsRequestSchema, McpError, ReadResourceRequestSchema, } from "@modelcontextprotocol/sdk/types.js";
+import { CallToolRequestSchema, ErrorCode, ListResourcesRequestSchema, ListToolsRequestSchema, McpError, ReadResourceRequestSchema, ListPromptsRequestSchema, GetPromptRequestSchema, } from "@modelcontextprotocol/sdk/types.js";
 import axios from "axios";
 import * as cheerio from "cheerio";
-// In-memory storage
+// Enhanced storage with metadata
 const scanResults = [];
 const vulnerableSystems = [];
 const systemInfoCache = new Map();
+const securityAssessments = [];
+const scanHistory = [];
+// Default configuration
+const DEFAULT_CONFIG = {
+    timeout: 5000,
+    concurrency: 5,
+    rateLimit: 100,
+    userAgent: 'MESH-Scanner/1.0 (Security Research)'
+};
 // Default credentials
 const DEFAULT_USERNAME = "freedom";
 const DEFAULT_PASSWORD = "viscount";
-// Create MCP server
+// Create MCP server with enhanced capabilities
 const server = new Server({
     name: "mesh-scanner",
-    version: "0.1.0",
+    version: "0.2.0",
 }, {
     capabilities: {
         resources: {},
         tools: {},
+        prompts: {},
     },
+});
+/**
+ * Handler for listing available prompts
+ */
+server.setRequestHandler(ListPromptsRequestSchema, async () => {
+    return {
+        prompts: [
+            {
+                name: "security_assessment",
+                description: "Generate a comprehensive security assessment report based on scan results",
+                arguments: [
+                    {
+                        name: "scan_id",
+                        description: "Specific scan ID to analyze (optional, uses latest if not provided)",
+                        required: false,
+                    },
+                    {
+                        name: "format",
+                        description: "Report format: 'detailed', 'summary', or 'executive'",
+                        required: false,
+                    }
+                ]
+            },
+            {
+                name: "vulnerability_summary",
+                description: "Create a summary of vulnerabilities found across all scans",
+                arguments: [
+                    {
+                        name: "timeframe",
+                        description: "Timeframe to analyze: '24h', '7d', '30d', or 'all'",
+                        required: false,
+                    }
+                ]
+            },
+            {
+                name: "remediation_guide",
+                description: "Generate specific remediation recommendations for vulnerable systems",
+                arguments: [
+                    {
+                        name: "system_ip",
+                        description: "IP address of the vulnerable system",
+                        required: true,
+                    },
+                    {
+                        name: "severity",
+                        description: "Severity level: 'low', 'medium', 'high', 'critical'",
+                        required: false,
+                    }
+                ]
+            },
+            {
+                name: "compliance_report",
+                description: "Generate a compliance report based on security findings",
+                arguments: [
+                    {
+                        name: "standard",
+                        description: "Compliance standard: 'NIST', 'ISO27001', 'SOC2', 'PCI-DSS'",
+                        required: true,
+                    }
+                ]
+            }
+        ]
+    };
+});
+/**
+ * Handler for getting prompt content
+ */
+server.setRequestHandler(GetPromptRequestSchema, async (request) => {
+    const { name, arguments: args } = request.params;
+    switch (name) {
+        case "security_assessment": {
+            const scanId = args?.scan_id;
+            const format = args?.format || 'detailed';
+            let targetScans = scanResults;
+            if (scanId) {
+                targetScans = scanResults.filter(s => s.scanId === scanId);
+            }
+            if (targetScans.length === 0) {
+                return {
+                    messages: [{
+                            role: "user",
+                            content: {
+                                type: "text",
+                                text: "No scan results available. Please run a scan first using the scan_ip or scan_ip_range tools."
+                            }
+                        }]
+                };
+            }
+            const vulnerableCount = targetScans.filter(s => s.vulnerable).length;
+            const totalCount = targetScans.length;
+            const riskLevel = vulnerableCount > 0 ?
+                (vulnerableCount > totalCount * 0.5 ? 'CRITICAL' :
+                    vulnerableCount > totalCount * 0.2 ? 'HIGH' :
+                        vulnerableCount > totalCount * 0.1 ? 'MEDIUM' : 'LOW') : 'LOW';
+            let report = '';
+            if (format === 'executive') {
+                report = `# Executive Security Assessment Report
+**Generated:** ${new Date().toISOString()}
+**Total Systems Scanned:** ${totalCount}
+**Vulnerable Systems:** ${vulnerableCount}
+**Risk Level:** ${riskLevel}
+
+## Executive Summary
+${vulnerableCount > 0 ?
+                    `**CRITICAL**: ${vulnerableCount} out of ${totalCount} systems are vulnerable to default credential attacks.` :
+                    `All ${totalCount} systems appear secure against default credential attacks.`}
+
+## Immediate Actions Required
+${vulnerableCount > 0 ?
+                    `1. **Immediate**: Change default credentials on all vulnerable systems
+2. **Within 24 hours**: Conduct full security audit
+3. **Within 1 week**: Implement network segmentation` :
+                    `1. Continue regular security monitoring
+2. Schedule quarterly security assessments
+3. Maintain current security posture`}`;
+            }
+            else if (format === 'summary') {
+                report = `# Security Assessment Summary
+**Scan ID:** ${scanId || 'Latest'}
+**Date:** ${new Date().toISOString()}
+**Total Systems:** ${totalCount}
+**Vulnerable Systems:** ${vulnerableCount}
+**Risk Level:** ${riskLevel}
+
+## Vulnerable Systems
+${vulnerableSystems.map(s => `- ${s.ipAddress} (${s.buildingName || 'Unknown Building'})`).join('\n')}
+
+## Recommendations
+${vulnerableCount > 0 ?
+                    'Immediate credential changes required for all vulnerable systems.' :
+                    'No immediate action required. Maintain current security practices.'}`;
+            }
+            else {
+                report = `# Detailed Security Assessment Report
+**Scan ID:** ${scanId || 'All Scans'}
+**Generated:** ${new Date().toISOString()}
+**Total Systems Analyzed:** ${totalCount}
+**Vulnerable Systems:** ${vulnerableCount}
+**Risk Level:** ${riskLevel}
+
+## System Analysis
+${targetScans.map(s => `
+### ${s.ipAddress}
+- **Status:** ${s.vulnerable ? 'VULNERABLE' : 'SECURE'}
+- **Building:** ${s.buildingName || 'Unknown'}
+- **Address:** ${s.buildingAddress || 'Unknown'}
+- **Scan Time:** ${s.timestamp}
+`).join('\n')}
+
+## Security Recommendations
+${vulnerableCount > 0 ? `
+### Immediate Actions (0-24 hours)
+1. Change default credentials on all vulnerable systems
+2. Disable or restrict network access to vulnerable systems
+3. Document all affected systems
+
+### Short-term Actions (1-7 days)
+1. Conduct full security audit of all systems
+2. Implement strong password policies
+3. Enable logging and monitoring
+
+### Long-term Actions (1-4 weeks)
+1. Implement network segmentation
+2. Deploy intrusion detection systems
+3. Establish regular security assessments
+4. Train staff on security best practices
+` : `
+### Maintenance Recommendations
+1. Continue regular security monitoring
+2. Schedule quarterly vulnerability assessments
+3. Maintain strong password policies
+4. Keep systems updated with latest security patches
+`}`;
+            }
+            return {
+                messages: [{
+                        role: "user",
+                        content: {
+                            type: "text",
+                            text: report
+                        }
+                    }]
+            };
+        }
+        case "vulnerability_summary": {
+            const timeframe = args?.timeframe || 'all';
+            const cutoffDate = new Date();
+            switch (timeframe) {
+                case '24h':
+                    cutoffDate.setDate(cutoffDate.getDate() - 1);
+                    break;
+                case '7d':
+                    cutoffDate.setDate(cutoffDate.getDate() - 7);
+                    break;
+                case '30d':
+                    cutoffDate.setDate(cutoffDate.getDate() - 30);
+                    break;
+            }
+            const filteredResults = timeframe === 'all' ?
+                scanResults :
+                scanResults.filter(s => new Date(s.timestamp) >= cutoffDate);
+            const vulnerableCount = filteredResults.filter(s => s.vulnerable).length;
+            const totalCount = filteredResults.length;
+            const uniqueBuildings = new Set(filteredResults.filter(s => s.vulnerable).map(s => s.buildingName).filter(Boolean));
+            return {
+                messages: [{
+                        role: "user",
+                        content: {
+                            type: "text",
+                            text: `# Vulnerability Summary (${timeframe})
+**Period:** ${timeframe === 'all' ? 'All Time' : `Last ${timeframe}`}
+**Total Systems Scanned:** ${totalCount}
+**Vulnerable Systems:** ${vulnerableCount}
+**Vulnerability Rate:** ${totalCount > 0 ? ((vulnerableCount / totalCount) * 100).toFixed(1) : 0}%
+**Unique Buildings Affected:** ${uniqueBuildings.size}
+
+## Vulnerability Trends
+${vulnerableCount > 0 ? `
+### Most Affected Locations
+${Array.from(uniqueBuildings).slice(0, 5).map(b => `- ${b}`).join('\n')}
+
+### Key Findings
+- ${vulnerableCount} systems remain vulnerable to default credential attacks
+- Average vulnerability rate: ${totalCount > 0 ? ((vulnerableCount / totalCount) * 100).toFixed(1) : 0}%
+- ${uniqueBuildings.size} unique buildings contain vulnerable systems
+` : 'No vulnerable systems detected in the specified timeframe.'}
+
+## Recommendations
+${vulnerableCount > 0 ? `
+1. **Immediate**: Change default credentials on all vulnerable systems
+2. **Short-term**: Implement automated vulnerability scanning
+3. **Long-term**: Establish security awareness training programs
+` : `
+1. Continue regular security monitoring
+2. Maintain current security practices
+3. Schedule periodic security assessments
+`}`
+                        }
+                    }]
+            };
+        }
+        case "remediation_guide": {
+            const systemIp = args?.system_ip;
+            const severity = args?.severity || 'medium';
+            if (!systemIp) {
+                return {
+                    messages: [{
+                            role: "user",
+                            content: {
+                                type: "text",
+                                text: "System IP address is required for remediation guidance."
+                            }
+                        }]
+                };
+            }
+            const system = vulnerableSystems.find(s => s.ipAddress === systemIp);
+            if (!system) {
+                return {
+                    messages: [{
+                            role: "user",
+                            content: {
+                                type: "text",
+                                text: `No vulnerable system found with IP: ${systemIp}. Please ensure the system has been scanned and found vulnerable.`
+                            }
+                        }]
+                };
+            }
+            const remediationSteps = {
+                low: [
+                    "Change default admin credentials",
+                    "Review user access permissions",
+                    "Enable basic logging"
+                ],
+                medium: [
+                    "Immediately change default credentials",
+                    "Disable unused admin accounts",
+                    "Enable audit logging",
+                    "Implement network segmentation"
+                ],
+                high: [
+                    "URGENT: Change all default credentials immediately",
+                    "Isolate system from network until secured",
+                    "Conduct full security audit",
+                    "Implement multi-factor authentication",
+                    "Enable comprehensive logging and monitoring"
+                ],
+                critical: [
+                    "CRITICAL: Isolate system immediately",
+                    "Change all default credentials",
+                    "Conduct emergency security assessment",
+                    "Implement network segmentation",
+                    "Deploy intrusion detection system",
+                    "Notify security team and management",
+                    "Document incident and response actions"
+                ]
+            };
+            const steps = remediationSteps[severity] || remediationSteps.medium;
+            return {
+                messages: [{
+                        role: "user",
+                        content: {
+                            type: "text",
+                            text: `# Remediation Guide for ${systemIp}
+**System:** ${system.buildingName || 'Unknown Building'}
+**Address:** ${system.buildingAddress || 'Unknown Address'}
+**Severity Level:** ${severity.toUpperCase()}
+**Discovered:** ${system.timestamp}
+
+## Immediate Actions Required
+${steps.map((step, index) => `${index + 1}. ${step}`).join('\n')}
+
+## Technical Details
+- **Default Username:** freedom
+- **Default Password:** viscount
+- **Vulnerability:** CVE-2023-XXXX (Default credential exposure)
+- **Affected Service:** MESH by Viscount Administration Interface
+
+## Verification Steps
+1. After changing credentials, test login with new credentials
+2. Verify old credentials no longer work
+3. Check system logs for any unauthorized access
+4. Test system functionality remains intact
+
+## Additional Security Measures
+- Enable account lockout after failed attempts
+- Implement IP-based access restrictions
+- Regular security assessments
+- Staff security training
+- Incident response plan activation`
+                        }
+                    }]
+            };
+        }
+        case "compliance_report": {
+            const standard = args?.standard;
+            if (!standard) {
+                return {
+                    messages: [{
+                            role: "user",
+                            content: {
+                                type: "text",
+                                text: "Compliance standard is required. Please specify: NIST, ISO27001, SOC2, or PCI-DSS"
+                            }
+                        }]
+                };
+            }
+            const vulnerableCount = vulnerableSystems.length;
+            const totalCount = scanResults.length;
+            const complianceMapping = {
+                'NIST': {
+                    framework: 'NIST Cybersecurity Framework',
+                    controls: {
+                        'PR.AC-1': 'Identity and credentials are managed for authorized devices and users',
+                        'PR.AC-7': 'Users, devices, and other assets are authenticated',
+                        'DE.CM-1': 'Networks are monitored to detect potential cybersecurity events',
+                        'RS.MI-1': 'Incidents are contained'
+                    }
+                },
+                'ISO27001': {
+                    framework: 'ISO 27001:2013',
+                    controls: {
+                        'A.9.2.1': 'User registration and de-registration',
+                        'A.9.2.4': 'Management of secret authentication information',
+                        'A.9.4.1': 'Use of secret authentication information',
+                        'A.12.6.1': 'Management of technical vulnerabilities'
+                    }
+                },
+                'SOC2': {
+                    framework: 'SOC 2 Type II',
+                    controls: {
+                        'CC6.1': 'Logical and physical access controls',
+                        'CC6.2': 'Authentication and authorization',
+                        'CC7.1': 'Security monitoring activities',
+                        'CC7.2': 'System vulnerabilities are identified and remediated'
+                    }
+                },
+                'PCI-DSS': {
+                    framework: 'PCI DSS v4.0',
+                    controls: {
+                        '2.1': 'Default passwords and security parameters are changed',
+                        '8.2.3': 'Passwords/passphrases are not vendor-supplied defaults',
+                        '8.3.6': 'Strong cryptography is used to render all authentication credentials unreadable',
+                        '12.10.4': 'Incident response procedures are implemented'
+                    }
+                }
+            };
+            const mapping = complianceMapping[standard];
+            if (!mapping) {
+                return {
+                    messages: [{
+                            role: "user",
+                            content: {
+                                type: "text",
+                                text: `Unsupported compliance standard: ${standard}. Please use: NIST, ISO27001, SOC2, or PCI-DSS`
+                            }
+                        }]
+                };
+            }
+            return {
+                messages: [{
+                        role: "user",
+                        content: {
+                            type: "text",
+                            text: `# ${mapping.framework} Compliance Report
+**Generated:** ${new Date().toISOString()}
+**Total Systems:** ${totalCount}
+**Vulnerable Systems:** ${vulnerableCount}
+**Compliance Status:** ${vulnerableCount > 0 ? 'NON-COMPLIANT' : 'COMPLIANT'}
+
+## Affected Controls
+${Object.entries(mapping.controls).map(([control, description]) => `
+### ${control}: ${description}
+**Status:** ${vulnerableCount > 0 ? 'FAIL' : 'PASS'}
+**Evidence:** ${vulnerableCount > 0 ? `${vulnerableCount} systems using default credentials` : 'No default credential usage detected'}
+**Remediation:** ${vulnerableCount > 0 ? 'Change all default credentials immediately' : 'Continue current security practices'}
+`).join('\n')}
+
+## Compliance Summary
+${vulnerableCount > 0 ? `
+**CRITICAL**: ${vulnerableCount} systems are non-compliant with ${mapping.framework} requirements.
+- Immediate remediation required for all vulnerable systems
+- Document all remediation actions
+- Implement ongoing monitoring
+- Schedule compliance audit
+` : `
+**COMPLIANT**: All systems meet ${mapping.framework} requirements.
+- Continue current security practices
+- Schedule regular compliance reviews
+- Maintain documentation
+`}`
+                        }
+                    }]
+            };
+        }
+        default:
+            throw new McpError(ErrorCode.MethodNotFound, `Unknown prompt: ${name}`);
+    }
 });
 /**
  * Handler for listing available resources
@@ -49,6 +497,30 @@ server.setRequestHandler(ListResourcesRequestSchema, async () => {
                 mimeType: "application/json",
                 name: "Vulnerable MESH Systems",
                 description: "List of MESH systems vulnerable to default credentials"
+            },
+            {
+                uri: "mesh://scan-history",
+                mimeType: "application/json",
+                name: "MESH Scan History",
+                description: "Historical scan data with timestamps and results"
+            },
+            {
+                uri: "mesh://vulnerability-stats",
+                mimeType: "application/json",
+                name: "MESH Vulnerability Statistics",
+                description: "Statistics about vulnerabilities found across all scans"
+            },
+            {
+                uri: "mesh://system-details",
+                mimeType: "application/json",
+                name: "MESH System Details",
+                description: "Detailed information about discovered MESH systems"
+            },
+            {
+                uri: "mesh://security-assessments",
+                mimeType: "application/json",
+                name: "Security Assessments",
+                description: "Generated security assessment reports"
             }
         ]
     };
@@ -63,7 +535,7 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
             contents: [{
                     uri: uri,
                     mimeType: "application/json",
-                    text: JSON.stringify(scanResults, null, 2)
+                    text: JSON.stringify(scanResults.slice(-50), null, 2)
                 }]
         };
     }
@@ -73,6 +545,64 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
                     uri: uri,
                     mimeType: "application/json",
                     text: JSON.stringify(vulnerableSystems, null, 2)
+                }]
+        };
+    }
+    else if (uri === "mesh://scan-history") {
+        return {
+            contents: [{
+                    uri: uri,
+                    mimeType: "application/json",
+                    text: JSON.stringify(scanHistory, null, 2)
+                }]
+        };
+    }
+    else if (uri === "mesh://vulnerability-stats") {
+        const totalScans = scanResults.length;
+        const vulnerableCount = vulnerableSystems.length;
+        const uniqueBuildings = new Set(vulnerableSystems.map(s => s.buildingName).filter(Boolean));
+        const recentScans = scanResults.filter(s => {
+            const scanDate = new Date(s.timestamp);
+            const cutoffDate = new Date();
+            cutoffDate.setDate(cutoffDate.getDate() - 7);
+            return scanDate >= cutoffDate;
+        });
+        const stats = {
+            totalScans,
+            vulnerableCount,
+            vulnerabilityRate: totalScans > 0 ? (vulnerableCount / totalScans) * 100 : 0,
+            uniqueBuildings: uniqueBuildings.size,
+            recentScans: recentScans.length,
+            recentVulnerable: recentScans.filter(s => s.vulnerable).length,
+            lastScan: scanResults.length > 0 ? scanResults[scanResults.length - 1].timestamp : null
+        };
+        return {
+            contents: [{
+                    uri: uri,
+                    mimeType: "application/json",
+                    text: JSON.stringify(stats, null, 2)
+                }]
+        };
+    }
+    else if (uri === "mesh://system-details") {
+        const details = Array.from(systemInfoCache.entries()).map(([ip, info]) => ({
+            ipAddress: ip,
+            ...info
+        }));
+        return {
+            contents: [{
+                    uri: uri,
+                    mimeType: "application/json",
+                    text: JSON.stringify(details, null, 2)
+                }]
+        };
+    }
+    else if (uri === "mesh://security-assessments") {
+        return {
+            contents: [{
+                    uri: uri,
+                    mimeType: "application/json",
+                    text: JSON.stringify(securityAssessments, null, 2)
                 }]
         };
     }
@@ -91,105 +621,6 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
         };
     }
     throw new McpError(ErrorCode.InvalidRequest, `Invalid URI: ${uri}`);
-});
-/**
- * Handler for listing available tools
- */
-server.setRequestHandler(ListToolsRequestSchema, async () => {
-    return {
-        tools: [
-            {
-                name: "scan_ip",
-                description: "Scan a single IP address for MESH system and test default credentials",
-                inputSchema: {
-                    type: "object",
-                    properties: {
-                        ipAddress: {
-                            type: "string",
-                            description: "IP address to scan (e.g., 192.168.1.1)"
-                        },
-                        timeout: {
-                            type: "number",
-                            description: "Timeout in milliseconds (default: 5000)"
-                        }
-                    },
-                    required: ["ipAddress"]
-                }
-            },
-            {
-                name: "scan_ip_range",
-                description: "Scan a range of IP addresses for MESH systems and test default credentials",
-                inputSchema: {
-                    type: "object",
-                    properties: {
-                        startIp: {
-                            type: "string",
-                            description: "Starting IP address (e.g., 192.168.1.1)"
-                        },
-                        endIp: {
-                            type: "string",
-                            description: "Ending IP address (e.g., 192.168.1.254)"
-                        },
-                        timeout: {
-                            type: "number",
-                            description: "Timeout in milliseconds (default: 5000)"
-                        },
-                        concurrency: {
-                            type: "number",
-                            description: "Number of concurrent scans (default: 5)"
-                        }
-                    },
-                    required: ["startIp", "endIp"]
-                }
-            },
-            {
-                name: "test_default_credentials",
-                description: "Test if a MESH system is vulnerable to default credentials",
-                inputSchema: {
-                    type: "object",
-                    properties: {
-                        url: {
-                            type: "string",
-                            description: "URL of the MESH system (e.g., http://192.168.1.1)"
-                        }
-                    },
-                    required: ["url"]
-                }
-            },
-            {
-                name: "get_system_info",
-                description: "Get information about a vulnerable MESH system (users, events, etc.)",
-                inputSchema: {
-                    type: "object",
-                    properties: {
-                        url: {
-                            type: "string",
-                            description: "URL of the vulnerable MESH system"
-                        }
-                    },
-                    required: ["url"]
-                }
-            },
-            {
-                name: "unlock_entrance",
-                description: "Unlock an entrance (for educational purposes only)",
-                inputSchema: {
-                    type: "object",
-                    properties: {
-                        url: {
-                            type: "string",
-                            description: "URL of the vulnerable MESH system"
-                        },
-                        entranceId: {
-                            type: "string",
-                            description: "ID of the entrance to unlock"
-                        }
-                    },
-                    required: ["url", "entranceId"]
-                }
-            }
-        ]
-    };
 });
 /**
  * Convert IP address to number for range calculations
@@ -219,7 +650,10 @@ async function isMeshSystem(url, timeout = 5000) {
     try {
         const response = await axios.get(`${url}/mesh/servlet/mesh.webadmin.MESHAdminServlet`, {
             timeout,
-            validateStatus: () => true
+            validateStatus: () => true,
+            headers: {
+                'User-Agent': DEFAULT_CONFIG.userAgent
+            }
         });
         return response.status === 200 &&
             response.data.includes("FREEDOM Administration Login");
@@ -240,7 +674,8 @@ async function testDefaultCredentials(url) {
                 'Cache-Control': 'max-age=0',
                 'Content-Type': 'application/x-www-form-urlencoded',
                 'Cookie': 'MESHWebAdminLanguage=en; MESHWebAdminRefreshInterval=0; MESHWebAdminPageSize=100',
-                'Connection': 'keep-alive'
+                'Connection': 'keep-alive',
+                'User-Agent': DEFAULT_CONFIG.userAgent
             },
             maxRedirects: 5
         });
@@ -277,20 +712,25 @@ async function getSystemInfo(url) {
         await axios.post(`${url}/mesh/servlet/mesh.webadmin.MESHAdminServlet?requestedAction=login`, `formLoginName=${DEFAULT_USERNAME}&formLoginPassword=${DEFAULT_PASSWORD}&formLanguage=en&formLogRefreshInterval=0&formPageSize=100`, {
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
-                'Cookie': 'MESHWebAdminLanguage=en; MESHWebAdminRefreshInterval=0; MESHWebAdminPageSize=100'
+                'Cookie': 'MESHWebAdminLanguage=en; MESHWebAdminRefreshInterval=0; MESHWebAdminPageSize=100',
+                'User-Agent': DEFAULT_CONFIG.userAgent
             },
             maxRedirects: 5
         });
         // Get cookies from login response
         const cookieResponse = await axios.get(`${url}/mesh/servlet/mesh.webadmin.MESHAdminServlet`, {
-            maxRedirects: 5
+            maxRedirects: 5,
+            headers: {
+                'User-Agent': DEFAULT_CONFIG.userAgent
+            }
         });
         const cookies = cookieResponse.headers['set-cookie'] || [];
         const cookieString = cookies.join('; ');
         // Get building info
         const siteResponse = await axios.get(`${url}/mesh/servlet/mesh.webadmin.MESHAdminServlet?requestedAction=viewSite`, {
             headers: {
-                'Cookie': cookieString
+                'Cookie': cookieString,
+                'User-Agent': DEFAULT_CONFIG.userAgent
             }
         });
         const $ = cheerio.load(siteResponse.data);
@@ -305,7 +745,8 @@ async function getSystemInfo(url) {
         // Get users
         const usersResponse = await axios.get(`${url}/mesh/servlet/mesh.webadmin.MESHAdminServlet?requestedAction=viewUsers`, {
             headers: {
-                'Cookie': cookieString
+                'Cookie': cookieString,
+                'User-Agent': DEFAULT_CONFIG.userAgent
             }
         });
         const users = [];
@@ -326,7 +767,8 @@ async function getSystemInfo(url) {
         // Get events
         const eventsResponse = await axios.get(`${url}/mesh/servlet/mesh.webadmin.MESHAdminServlet?requestedAction=viewEvents`, {
             headers: {
-                'Cookie': cookieString
+                'Cookie': cookieString,
+                'User-Agent': DEFAULT_CONFIG.userAgent
             }
         });
         const recentEvents = [];
@@ -351,7 +793,10 @@ async function getSystemInfo(url) {
             buildingName,
             buildingAddress,
             users,
-            recentEvents
+            recentEvents,
+            totalUsers: users.length,
+            totalEvents: recentEvents.length,
+            lastUpdated: new Date().toISOString()
         };
     }
     catch (error) {
@@ -368,20 +813,25 @@ async function unlockEntrance(url, entranceId) {
         await axios.post(`${url}/mesh/servlet/mesh.webadmin.MESHAdminServlet?requestedAction=login`, `formLoginName=${DEFAULT_USERNAME}&formLoginPassword=${DEFAULT_PASSWORD}&formLanguage=en&formLogRefreshInterval=0&formPageSize=100`, {
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
-                'Cookie': 'MESHWebAdminLanguage=en; MESHWebAdminRefreshInterval=0; MESHWebAdminPageSize=100'
+                'Cookie': 'MESHWebAdminLanguage=en; MESHWebAdminRefreshInterval=0; MESHWebAdminPageSize=100',
+                'User-Agent': DEFAULT_CONFIG.userAgent
             },
             maxRedirects: 5
         });
         // Get cookies from login response
         const cookieResponse = await axios.get(`${url}/mesh/servlet/mesh.webadmin.MESHAdminServlet`, {
-            maxRedirects: 5
+            maxRedirects: 5,
+            headers: {
+                'User-Agent': DEFAULT_CONFIG.userAgent
+            }
         });
         const cookies = cookieResponse.headers['set-cookie'] || [];
         const cookieString = cookies.join('; ');
         // Unlock entrance
         await axios.get(`${url}/mesh/servlet/mesh.webadmin.MESHAdminServlet?requestedAction=unlockEntrance&entranceId=${entranceId}`, {
             headers: {
-                'Cookie': cookieString
+                'Cookie': cookieString,
+                'User-Agent': DEFAULT_CONFIG.userAgent
             }
         });
         return true;
@@ -392,23 +842,180 @@ async function unlockEntrance(url, entranceId) {
     }
 }
 /**
+ * Handler for listing available tools
+ */
+server.setRequestHandler(ListToolsRequestSchema, async () => {
+    return {
+        tools: [
+            {
+                name: "scan_ip",
+                description: "Scan a single IP address for MESH system and test default credentials",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        ipAddress: {
+                            type: "string",
+                            description: "IP address to scan (e.g., 192.168.1.1)"
+                        },
+                        timeout: {
+                            type: "number",
+                            description: "Timeout in milliseconds (default: 5000)"
+                        },
+                        config: {
+                            type: "object",
+                            properties: {
+                                userAgent: { type: "string", description: "Custom User-Agent string" },
+                                rateLimit: { type: "number", description: "Rate limit in ms between requests" }
+                            }
+                        }
+                    },
+                    required: ["ipAddress"]
+                }
+            },
+            {
+                name: "scan_ip_range",
+                description: "Scan a range of IP addresses for MESH systems and test default credentials",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        startIp: {
+                            type: "string",
+                            description: "Starting IP address (e.g., 192.168.1.1)"
+                        },
+                        endIp: {
+                            type: "string",
+                            description: "Ending IP address (e.g., 192.168.1.254)"
+                        },
+                        timeout: {
+                            type: "number",
+                            description: "Timeout in milliseconds (default: 5000)"
+                        },
+                        concurrency: {
+                            type: "number",
+                            description: "Number of concurrent scans (default: 5, max: 20)"
+                        },
+                        config: {
+                            type: "object",
+                            properties: {
+                                userAgent: { type: "string", description: "Custom User-Agent string" },
+                                rateLimit: { type: "number", description: "Rate limit in ms between requests" }
+                            }
+                        }
+                    },
+                    required: ["startIp", "endIp"]
+                }
+            },
+            {
+                name: "test_default_credentials",
+                description: "Test if a MESH system is vulnerable to default credentials",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        url: {
+                            type: "string",
+                            description: "URL of the MESH system (e.g., http://192.168.1.1)"
+                        },
+                        config: {
+                            type: "object",
+                            properties: {
+                                userAgent: { type: "string", description: "Custom User-Agent string" }
+                            }
+                        }
+                    },
+                    required: ["url"]
+                }
+            },
+            {
+                name: "get_system_info",
+                description: "Get information about a vulnerable MESH system (users, events, etc.)",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        url: {
+                            type: "string",
+                            description: "URL of the vulnerable MESH system"
+                        },
+                        config: {
+                            type: "object",
+                            properties: {
+                                userAgent: { type: "string", description: "Custom User-Agent string" }
+                            }
+                        }
+                    },
+                    required: ["url"]
+                }
+            },
+            {
+                name: "unlock_entrance",
+                description: "Unlock an entrance (for educational purposes only)",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        url: {
+                            type: "string",
+                            description: "URL of the vulnerable MESH system"
+                        },
+                        entranceId: {
+                            type: "string",
+                            description: "ID of the entrance to unlock"
+                        },
+                        config: {
+                            type: "object",
+                            properties: {
+                                userAgent: { type: "string", description: "Custom User-Agent string" }
+                            }
+                        }
+                    },
+                    required: ["url", "entranceId"]
+                }
+            },
+            {
+                name: "export_scan_results",
+                description: "Export scan results to various formats",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        format: {
+                            type: "string",
+                            enum: ["json", "csv", "xml"],
+                            description: "Export format (default: json)"
+                        },
+                        includeVulnerableOnly: {
+                            type: "boolean",
+                            description: "Include only vulnerable systems (default: false)"
+                        },
+                        scanId: {
+                            type: "string",
+                            description: "Specific scan ID to export (optional)"
+                        }
+                    },
+                    required: ["format"]
+                }
+            }
+        ]
+    };
+});
+/**
  * Handler for tool calls
  */
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
     switch (request.params.name) {
         case "scan_ip": {
             const ipAddress = String(request.params.arguments?.ipAddress);
-            const timeout = Number(request.params.arguments?.timeout) || 5000;
+            const timeout = Number(request.params.arguments?.timeout) || DEFAULT_CONFIG.timeout;
+            const config = request.params.arguments?.config || {};
             if (!ipAddress) {
                 throw new McpError(ErrorCode.InvalidParams, "IP address is required");
             }
+            const scanId = `scan_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
             const url = `http://${ipAddress}`;
             const isMesh = await isMeshSystem(url, timeout);
             let result = {
                 ipAddress,
                 url,
                 vulnerable: false,
-                timestamp: new Date().toISOString()
+                timestamp: new Date().toISOString(),
+                scanId
             };
             if (isMesh) {
                 const { vulnerable, buildingName, buildingAddress } = await testDefaultCredentials(url);
@@ -416,6 +1023,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 result.buildingName = buildingName;
                 result.buildingAddress = buildingAddress;
                 scanResults.push(result);
+                scanHistory.push(result);
                 if (vulnerable) {
                     vulnerableSystems.push(result);
                 }
@@ -430,8 +1038,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         case "scan_ip_range": {
             const startIp = String(request.params.arguments?.startIp);
             const endIp = String(request.params.arguments?.endIp);
-            const timeout = Number(request.params.arguments?.timeout) || 5000;
-            const concurrency = Number(request.params.arguments?.concurrency) || 5;
+            const timeout = Number(request.params.arguments?.timeout) || DEFAULT_CONFIG.timeout;
+            const concurrency = Math.min(Number(request.params.arguments?.concurrency) || DEFAULT_CONFIG.concurrency, 20);
+            const config = request.params.arguments?.config || {};
             if (!startIp || !endIp) {
                 throw new McpError(ErrorCode.InvalidParams, "Start and end IP addresses are required");
             }
@@ -442,6 +1051,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             }
             const results = [];
             const ipCount = endLong - startLong + 1;
+            const scanId = `range_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
             // Process IPs in batches for concurrency
             for (let i = 0; i < ipCount; i += concurrency) {
                 const batch = [];
@@ -456,7 +1066,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                         ipAddress: ip,
                         url,
                         vulnerable: false,
-                        timestamp: new Date().toISOString()
+                        timestamp: new Date().toISOString(),
+                        scanId
                     };
                     if (isMesh) {
                         const { vulnerable, buildingName, buildingAddress } = await testDefaultCredentials(url);
@@ -464,6 +1075,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                         result.buildingName = buildingName;
                         result.buildingAddress = buildingAddress;
                         scanResults.push(result);
+                        scanHistory.push(result);
                         if (vulnerable) {
                             vulnerableSystems.push(result);
                         }
@@ -472,11 +1084,42 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 });
                 const batchResults = await Promise.all(batchPromises);
                 results.push(...batchResults);
+                // Rate limiting between batches
+                if (config.rateLimit && config.rateLimit > 0) {
+                    await new Promise(resolve => setTimeout(resolve, config.rateLimit));
+                }
             }
+            // Generate security assessment
+            const vulnerableCount = results.filter(r => r.vulnerable).length;
+            const assessment = {
+                scanId,
+                timestamp: new Date().toISOString(),
+                totalSystems: results.length,
+                vulnerableSystems: vulnerableCount,
+                riskLevel: vulnerableCount > 0 ?
+                    (vulnerableCount > results.length * 0.5 ? 'CRITICAL' :
+                        vulnerableCount > results.length * 0.2 ? 'HIGH' :
+                            vulnerableCount > results.length * 0.1 ? 'MEDIUM' : 'LOW') : 'LOW',
+                recommendations: vulnerableCount > 0 ? [
+                    "Change default credentials on all vulnerable systems",
+                    "Implement network segmentation",
+                    "Enable comprehensive logging and monitoring",
+                    "Conduct regular security assessments"
+                ] : [
+                    "Continue regular security monitoring",
+                    "Maintain current security practices"
+                ],
+                summary: `Scanned ${results.length} systems, found ${vulnerableCount} vulnerable to default credentials`
+            };
+            securityAssessments.push(assessment);
             return {
                 content: [{
                         type: "text",
-                        text: JSON.stringify(results, null, 2)
+                        text: JSON.stringify({
+                            scanId,
+                            results,
+                            assessment
+                        }, null, 2)
                     }]
             };
         }
@@ -563,7 +1206,51 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             return {
                 content: [{
                         type: "text",
-                        text: JSON.stringify({ success, message: success ? "Entrance unlocked successfully" : "Failed to unlock entrance" }, null, 2)
+                        text: JSON.stringify({
+                            success,
+                            message: success ? "Entrance unlocked successfully" : "Failed to unlock entrance",
+                            warning: "This action was performed for educational purposes only. In real scenarios, this would be unauthorized access."
+                        }, null, 2)
+                    }]
+            };
+        }
+        case "export_scan_results": {
+            const format = String(request.params.arguments?.format);
+            const includeVulnerableOnly = Boolean(request.params.arguments?.includeVulnerableOnly);
+            const scanId = request.params.arguments?.scanId;
+            let resultsToExport = scanResults;
+            if (scanId) {
+                resultsToExport = scanResults.filter(s => s.scanId === scanId);
+            }
+            if (includeVulnerableOnly) {
+                resultsToExport = resultsToExport.filter(s => s.vulnerable);
+            }
+            let exportData = '';
+            switch (format) {
+                case 'csv':
+                    exportData = 'IP Address,URL,Vulnerable,Building Name,Building Address,Timestamp,Scan ID\n';
+                    exportData += resultsToExport.map(s => `${s.ipAddress},${s.url},${s.vulnerable},${s.buildingName || ''},${s.buildingAddress || ''},${s.timestamp},${s.scanId}`).join('\n');
+                    break;
+                case 'xml':
+                    exportData = '<?xml version="1.0" encoding="UTF-8"?>\n<scan_results>\n';
+                    exportData += resultsToExport.map(s => `  <system>
+    <ip_address>${s.ipAddress}</ip_address>
+    <url>${s.url}</url>
+    <vulnerable>${s.vulnerable}</vulnerable>
+    <building_name>${s.buildingName || ''}</building_name>
+    <building_address>${s.buildingAddress || ''}</building_address>
+    <timestamp>${s.timestamp}</timestamp>
+    <scan_id>${s.scanId}</scan_id>
+  </system>`).join('\n');
+                    exportData += '\n</scan_results>';
+                    break;
+                default: // json
+                    exportData = JSON.stringify(resultsToExport, null, 2);
+            }
+            return {
+                content: [{
+                        type: "text",
+                        text: exportData
                     }]
             };
         }
@@ -578,6 +1265,7 @@ async function main() {
     const transport = new StdioServerTransport();
     await server.connect(transport);
     console.error("MESH Scanner MCP server running on stdio");
+    console.error("Version: 0.2.0 - Enhanced with prompts, resources, and improved tools");
     // Error handling
     server.onerror = (error) => console.error("[MCP Error]", error);
     process.on("SIGINT", async () => {
