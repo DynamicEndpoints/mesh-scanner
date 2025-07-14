@@ -6,14 +6,17 @@ WORKDIR /app
 COPY package*.json ./
 COPY tsconfig.json ./
 
-# Install dependencies
-RUN npm ci --only=production
+# Install all dependencies (including dev for TypeScript)
+RUN npm install
 
 # Copy source code
 COPY src/ ./src/
 
 # Build the application
 RUN npm run build
+
+# Remove dev dependencies for production
+RUN npm prune --omit=dev
 
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs
@@ -24,9 +27,6 @@ RUN chown -R mesh-scanner:nodejs /app
 
 # Switch to non-root user
 USER mesh-scanner
-
-# Expose port (if needed)
-EXPOSE 3000
 
 # Start the application
 CMD ["node", "build/index.js"]
