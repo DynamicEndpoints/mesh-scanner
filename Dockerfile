@@ -2,15 +2,13 @@ FROM node:18-alpine
 
 WORKDIR /app
 
-# Copy package files
+# Copy package files and source code
 COPY package*.json ./
 COPY tsconfig.json ./
+COPY src/ ./src/
 
 # Install all dependencies (including dev for TypeScript)
 RUN npm install
-
-# Copy source code
-COPY src/ ./src/
 
 # Build the application
 RUN npm run build
